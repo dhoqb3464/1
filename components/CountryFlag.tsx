@@ -39,15 +39,18 @@ export const CountryFlag = memo(({
   className = "w-8 h-6",
   showFallback = true
 }: CountryFlagProps) => {
-  const [FlagComponent, setFlagComponent] = useState<React.ComponentType<any> | null>(
-    () => flagComponentCache.get(countryCode) || null
-  );
-  const [isLoading, setIsLoading] = useState(!flagComponentCache.has(countryCode));
+  const [FlagComponent, setFlagComponent] = useState<React.ComponentType<any> | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
+    // 重置错误状态
+    setHasError(false);
+
     // 如果已经有缓存，直接使用
     if (flagComponentCache.has(countryCode)) {
-      setFlagComponent(flagComponentCache.get(countryCode) || null);
+      const cached = flagComponentCache.get(countryCode);
+      setFlagComponent(cached || null);
       setIsLoading(false);
       return;
     }
@@ -56,17 +59,17 @@ export const CountryFlag = memo(({
     loadFlagIcon(countryCode)
       .then((component) => {
         setFlagComponent(component);
+        setIsLoading(false);
       })
       .catch(() => {
         setFlagComponent(null);
-      })
-      .finally(() => {
+        setHasError(true);
         setIsLoading(false);
       });
   }, [countryCode]);
 
   // 加载中或加载失败时显示占位符
-  if ((isLoading || !FlagComponent) && showFallback) {
+  if ((isLoading || !FlagComponent || hasError) && showFallback) {
     return (
       <div className={`${className} bg-gradient-to-br from-[#007AFF] to-[#0055b3] rounded flex items-center justify-center shrink-0`}>
         <Icon name="globe" className="w-4 h-4 text-white" />
@@ -75,15 +78,38 @@ export const CountryFlag = memo(({
   }
 
   // 加载成功，显示国旗
-  if (FlagComponent) {
-    return (
-      <div className={`${className} rounded overflow-hidden shadow-md border border-white/20 shrink-0`}>
-        <FlagComponent className="w-full h-full object-cover" />
-      </div>
-    );
+  if (FlagComponent && !hasError) {
+    try {
+      return (
+        <div className={`${className} rounded overflow-hidden shadow-md border border-white/20 shrink-0`}>
+          <FlagComponent
+            title={countryCode}
+            aria-label={`Flag of ${countryCode}`}
+            style={{ display: 'block', width: '100%', height: '100%' }}
+          />
+        </div>
+      );
+    } catch (error) {
+      if (showFallback) {
+        return (
+          <div className={`${className} bg-gradient-to-br from-[#007AFF] to-[#0055b3] rounded flex items-center justify-center shrink-0`}>
+            <Icon name="globe" className="w-4 h-4 text-white" />
+          </div>
+        );
+      }
+      return null;
+    }
   }
 
-  return null;
+  return showFallback ? (
+    <div className={`${className} bg-gradient-to-br from-[#007AFF] to-[#0055b3] rounded flex items-center justify-center shrink-0`}>
+      <Icon name="globe" className="w-4 h-4 text-white" />
+    </div>
+  ) : null;
+}, (prevProps, nextProps) => {
+  return prevProps.countryCode === nextProps.countryCode &&
+         prevProps.className === nextProps.className &&
+         prevProps.showFallback === nextProps.showFallback;
 });
 
 CountryFlag.displayName = 'CountryFlag';
